@@ -68,6 +68,7 @@ int main() {
 
 - 已封装：Recast、Detour、DetourCrowd、DetourTileCache 头文件的全部名字（共 396 个）。`tools/surface.py` 按 clang 读到的头文件推导出该列表。
 - 不在此：DebugUtils（通过调试渲染器的回调绘制网格）、演示程序（RecastDemo）与上游测试。断言钩子（`rcAssertFailSetCustom`、`dtAssertFailSetCustom`）只在未定义 `NDEBUG` 的构建中存在；本包在每种配置都定义它。
+- 不是 `compat.recastnavigation`：索引里也有同一发布的传统包；本封装自带一份副本，因为“处处同位”要求库本身以 `-ffp-contract=off`、不用快速数学、各配置都定义 `NDEBUG` 编译，而依赖的构建不接受消费者的这些标志。一个程序只链接两者之一。
 - 分块缓存需要一个压缩器：`dtTileCacheCompressor` 是由程序实现的接口（上游演示用的 FastLZ 未收录）。
 - 群体的自适应速度采样调用 `cosf` 与 `sinf`：这一处的结果取决于平台的 C 库。
 

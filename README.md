@@ -78,6 +78,7 @@ The 64-bit polygon references (`DT_POLYREF64`) and the virtual query filter
 
 - Wrapped: every name of the headers of Recast, Detour, DetourCrowd and DetourTileCache (396 in all). `tools/surface.py` derives the list from the headers as clang reads them.
 - Not here: DebugUtils (drawing a mesh through a debug renderer's callbacks), the demo (RecastDemo) and upstream's tests. The assert hooks (`rcAssertFailSetCustom`, `dtAssertFailSetCustom`) exist only in a build without `NDEBUG`; the package builds with it in every profile.
+- Not `compat.recastnavigation`: the index also has the same release as a traditional package; this wrap vendors its own copy because the same bits everywhere need the library itself compiled with `-ffp-contract=off`, no fast math and `NDEBUG` in every profile, which a dependency's build does not take from its consumer. A program links one of the two, not both.
 - A tile cache needs a compressor: `dtTileCacheCompressor` is an interface the program implements (upstream's demo uses FastLZ, which is not vendored).
 - The crowd's adaptive velocity sampling calls `cosf` and `sinf`: its results follow the platform's C library there.
 
