@@ -1,0 +1,4 @@
+[template]
+description  = "Build a navigation mesh from a floor and a wall, find the way around the wall with import mcpplibs.mwrap.recastnavigation"
+default      = true
+post_message = "Run `mcpp run`."

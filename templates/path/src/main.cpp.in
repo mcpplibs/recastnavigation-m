@@ -1,0 +1,77 @@
+// A floor 20 m square with a wall across it: Recast builds the navigation mesh, Detour finds the way
+// from one side of the wall to the other, around its end.
+import std;
+import mcpplibs.mwrap.recastnavigation;
+
+int main() {
+    // The floor (two triangles) and the wall (a box from x -0.2 to 0.2, z -10 to 6, 2 m high; its top and sides).
+    const std::vector<float> vertices{-10, 0, -10, -10, 0, 10, 10, 0, 10, 10, 0, -10,
+                                      -0.2f, 0, -10, -0.2f, 2, -10, 0.2f, 2, -10, 0.2f, 0, -10,
+                                      -0.2f, 0, 6, -0.2f, 2, 6, 0.2f, 2, 6, 0.2f, 0, 6};
+    const std::vector<int> triangles{0, 1, 2, 0, 2, 3, 5, 9, 10, 5, 10, 6, 4, 8, 9, 4, 9, 5, 7, 6, 10, 7, 10, 11, 8, 11, 10, 8, 10, 9};
+    const int vertex_count = static_cast<int>(vertices.size() / 3), triangle_count = static_cast<int>(triangles.size() / 3);
+
+    rcConfig config{};
+    config.cs = 0.2f, config.ch = 0.1f, config.walkableSlopeAngle = 45;
+    config.walkableHeight = 20, config.walkableClimb = 4, config.walkableRadius = 2;  // in cells: 2 m, 0.4 m, 0.4 m
+    config.maxEdgeLen = 60, config.maxSimplificationError = 1.3f, config.minRegionArea = 64, config.mergeRegionArea = 400;
+    config.maxVertsPerPoly = 6, config.detailSampleDist = 1.2f, config.detailSampleMaxError = 0.1f;
+    rcCalcBounds(vertices.data(), vertex_count, config.bmin, config.bmax);
+    rcCalcGridSize(config.bmin, config.bmax, config.cs, &config.width, &config.height);
+
+    rcContext context(false);
+    rcHeightfield* solid = rcAllocHeightfield();
+    rcCreateHeightfield(&context, *solid, config.width, config.height, config.bmin, config.bmax, config.cs, config.ch);
+    std::vector<unsigned char> areas(static_cast<std::size_t>(triangle_count), 0);
+    rcMarkWalkableTriangles(&context, config.walkableSlopeAngle, vertices.data(), vertex_count, triangles.data(), triangle_count, areas.data());
+    rcRasterizeTriangles(&context, vertices.data(), vertex_count, triangles.data(), areas.data(), triangle_count, *solid, config.walkableClimb);
+    rcFilterLowHangingWalkableObstacles(&context, config.walkableClimb, *solid);
+    rcFilterLedgeSpans(&context, config.walkableHeight, config.walkableClimb, *solid);
+    rcFilterWalkableLowHeightSpans(&context, config.walkableHeight, *solid);
+    rcCompactHeightfield* compact = rcAllocCompactHeightfield();
+    rcBuildCompactHeightfield(&context, config.walkableHeight, config.walkableClimb, *solid, *compact);
+    rcErodeWalkableArea(&context, config.walkableRadius, *compact);
+    rcBuildDistanceField(&context, *compact);
+    rcBuildRegions(&context, *compact, 0, config.minRegionArea, config.mergeRegionArea);
+    rcContourSet* contours = rcAllocContourSet();
+    rcBuildContours(&context, *compact, config.maxSimplificationError, config.maxEdgeLen, *contours);
+    rcPolyMesh* mesh = rcAllocPolyMesh();
+    rcBuildPolyMesh(&context, *contours, config.maxVertsPerPoly, *mesh);
+    rcPolyMeshDetail* detail = rcAllocPolyMeshDetail();
+    rcBuildPolyMeshDetail(&context, *mesh, *compact, config.detailSampleDist, config.detailSampleMaxError, *detail);
+    for (int poly = 0; poly < mesh->npolys; ++poly) mesh->flags[poly] = 1;
+
+    dtNavMeshCreateParams params{};
+    params.verts = mesh->verts, params.vertCount = mesh->nverts, params.polys = mesh->polys, params.polyAreas = mesh->areas;
+    params.polyFlags = mesh->flags, params.polyCount = mesh->npolys, params.nvp = mesh->nvp;
+    params.detailMeshes = detail->meshes, params.detailVerts = detail->verts, params.detailVertsCount = detail->nverts;
+    params.detailTris = detail->tris, params.detailTriCount = detail->ntris;
+    params.walkableHeight = 2, params.walkableRadius = 0.4f, params.walkableClimb = 0.4f;
+    std::copy_n(mesh->bmin, 3, params.bmin), std::copy_n(mesh->bmax, 3, params.bmax);
+    params.cs = config.cs, params.ch = config.ch, params.buildBvTree = true;
+    unsigned char* data = nullptr;
+    int size = 0;
+    if (!dtCreateNavMeshData(&params, &data, &size)) return 1;
+
+    dtNavMesh* navmesh = dtAllocNavMesh();
+    navmesh->init(data, size, DT_TILE_FREE_DATA);
+    dtNavMeshQuery* query = dtAllocNavMeshQuery();
+    query->init(navmesh, 2048);
+    dtQueryFilter filter;
+    const float extents[3] = {1, 2, 1}, from[3] = {-5, 0, -5}, to[3] = {5, 0, -5};
+    dtPolyRef start = 0, end = 0;
+    float start_at[3], end_at[3];
+    query->findNearestPoly(from, extents, &filter, &start, start_at);
+    query->findNearestPoly(to, extents, &filter, &end, end_at);
+    dtPolyRef polys[256];
+    int poly_count = 0, corner_count = 0;
+    float corners[3 * 16];
+    query->findPath(start, end, start_at, end_at, &filter, polys, &poly_count, 256);
+    query->findStraightPath(start_at, end_at, polys, poly_count, corners, nullptr, nullptr, &corner_count, 16);
+    std::println("{} polygons; the way around the wall:", mesh->npolys);
+    for (int corner = 0; corner < corner_count; ++corner) std::println("  ({:.2f}, {:.2f})", corners[3 * corner], corners[3 * corner + 2]);
+
+    dtFreeNavMeshQuery(query), dtFreeNavMesh(navmesh);
+    rcFreePolyMesh(mesh), rcFreePolyMeshDetail(detail), rcFreeContourSet(contours), rcFreeCompactHeightfield(compact), rcFreeHeightField(solid);
+    return corner_count >= 3 ? 0 : 1;
+}

@@ -1,0 +1,15 @@
+[package]
+name    = "{{project.name}}"
+version = "0.1.0"
+
+[targets.{{project.name}}]
+kind = "bin"
+main = "src/main.cpp"
+
+[dependencies]
+{{self.name}} = "{{self.version}}"
+
+# Detour's inline math compiled here too: no contraction of a*b+c into an FMA,
+# as the library is built, so the path is the same on every platform.
+[build]
+cxxflags = ["-ffp-contract=off"]

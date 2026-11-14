@@ -1,0 +1,10 @@
+recastnavigation-m: C++ module wrapper
+Copyright (c) 2026 mcpp-community contributors
+
+The wrapper contributions are licensed under the Apache License, Version 2.0.
+Upstream code, copied interfaces and dependencies retain their original
+licenses and copyright notices. Recast & Detour is Copyright (c) 2009 Mikko
+Mononen and is distributed under the zlib License; its vendored sources and
+headers, with its README and License.txt, are retained in
+upstream/recastnavigation/. Provenance and checksums are recorded in
+upstream/documents.json.

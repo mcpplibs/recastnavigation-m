@@ -1,0 +1,63 @@
+# Module wrapper; upstream API preserved. Policy: mcpp-index/docs/mwrap.md.
+[package]
+namespace   = "mcpplibs.mwrap"
+name        = "recastnavigation"
+version     = "1.6.0"
+description = "Recast & Detour 1.6.0 C++ modules for mcpp (import mcpplibs.mwrap.recastnavigation;): navigation meshes built from triangles, path queries, crowds of agents, tiled meshes with obstacles"
+license     = "Apache-2.0"
+authors     = ["mcpp-community"]
+repo        = "https://github.com/mcpplibs/recastnavigation-m"
+platforms   = ["linux", "macos", "windows", "emscripten"]
+
+[targets.recastnavigation]
+kind = "lib"
+
+[build]
+# The four libraries, vendored byte for byte from the v1.6.0 release under
+# upstream/recastnavigation (upstream/documents.json: the release tarball,
+# each file's checksum) and built as upstream's CMake build does, without
+# DebugUtils and the demo. Every platform makes the same mesh, path and crowd
+# step from the same input: the compiler fuses no multiply and add into one
+# rounding (arm64's default does, x86-64's cannot without FMA) and keeps IEEE
+# semantics (no fast math), so no float decision differs by platform. (The
+# crowd's adaptive velocity sampling calls cosf and sinf, which come from the
+# platform's C library.) NDEBUG: the same library in every profile — upstream
+# declares its assert hooks (rcAssertFailSetCustom, dtAssertFailSetCustom) and
+# checks only when NDEBUG is not defined, which would make the module's names
+# differ between a dev and a release build.
+sources = [
+    "src/*.cppm",
+    "upstream/recastnavigation/Recast/Source/*.cpp",
+    "upstream/recastnavigation/Detour/Source/*.cpp",
+    "upstream/recastnavigation/DetourCrowd/Source/*.cpp",
+    "upstream/recastnavigation/DetourTileCache/Source/*.cpp",
+]
+include_dirs = [
+    "upstream/recastnavigation/Recast/Include",
+    "upstream/recastnavigation/Detour/Include",
+    "upstream/recastnavigation/DetourCrowd/Include",
+    "upstream/recastnavigation/DetourTileCache/Include",
+]
+cxxflags = ["-DNDEBUG", "-ffp-contract=off", "-fno-fast-math"]
+
+[dev-dependencies]
+compat.gtest = "1.15.2"
+
+[package.metadata.mwrap]
+upstream-version = "1.6.0"
+
+[[runtime.deploy]]
+from = "LICENSE"
+to   = "licenses/recastnavigation"
+
+[[runtime.deploy]]
+from = "NOTICE"
+to   = "licenses/recastnavigation"
+
+[[runtime.deploy]]
+from = "upstream/recastnavigation/README.md"
+to   = "licenses/recastnavigation/upstream/recastnavigation"
+
+[[runtime.deploy]]
+from = "upstream/recastnavigation/License.txt"
+to   = "licenses/recastnavigation/upstream/recastnavigation"
