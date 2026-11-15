@@ -18,6 +18,11 @@
       "upstream_commit": null,
       "upstream_issue": "https://github.com/recastnavigation/recastnavigation/issues/496",
       "why": "sampleVelocityAdaptive wrote a ring's last direction one slot past the one it counted for an even adaptiveDivs: the crowd sampled an uninitialised direction (different by platform and profile), and at adaptiveDivs 32 with adaptiveRings 4 wrote past the end of its stack array (upstream issues #496, #798, open)."
+    },
+    {
+      "path": "patches/0004-stable-sorts.patch",
+      "upstream_commit": null,
+      "why": "dtCreateNavMeshData's BV tree and rcBuildContours' hole merging sorted with the C library's qsort, which is not stable: glibc, macOS, the Windows UCRT and emscripten's musl order equal keys differently, so a mesh whose BV items or contour holes and diagonals tie (common on a grid) had different bytes, and a crowd on it walked differently, by platform; std::stable_sort with the same comparators gives one order everywhere. Upstream-worthy, not yet upstream."
     }
   ],
   "documents": [
@@ -105,7 +110,11 @@
     {
       "path": "upstream/recastnavigation/Detour/Source/DetourNavMeshBuilder.cpp",
       "source": "https://github.com/recastnavigation/recastnavigation/blob/v1.6.0/Detour/Source/DetourNavMeshBuilder.cpp",
-      "sha256": "bbe5adf461cae282291e498db50550eb3a12706e352dd83021165d38950119f3"
+      "sha256": "eb9626c9099b63241125d202b611f6678e323530c1e1d8704d6be8913b6bf368",
+      "upstream_sha256": "bbe5adf461cae282291e498db50550eb3a12706e352dd83021165d38950119f3",
+      "patches": [
+        "patches/0004-stable-sorts.patch"
+      ]
     },
     {
       "path": "upstream/recastnavigation/Detour/Source/DetourNavMeshQuery.cpp",
@@ -248,7 +257,11 @@
     {
       "path": "upstream/recastnavigation/Recast/Source/RecastContour.cpp",
       "source": "https://github.com/recastnavigation/recastnavigation/blob/v1.6.0/Recast/Source/RecastContour.cpp",
-      "sha256": "f5ad218147949dccc71885dfd1bc4bf2e303a35571b6da37d3696f8460220a39"
+      "sha256": "1cfb763a97ba708debe598bc9a34c464f6bea567b34255ba035696f20c5e612c",
+      "upstream_sha256": "f5ad218147949dccc71885dfd1bc4bf2e303a35571b6da37d3696f8460220a39",
+      "patches": [
+        "patches/0004-stable-sorts.patch"
+      ]
     },
     {
       "path": "upstream/recastnavigation/Recast/Source/RecastFilter.cpp",

@@ -13,7 +13,7 @@ The upstream C++ API is unchanged: `rcConfig`, `rcBuildPolyMesh`, `dtNavMesh`,
 `dtNavMeshQuery`, `dtCrowd`, `dtTileCache` and every other public name are the
 upstream entities, in the global namespace where upstream declares them. The
 four libraries (Recast, Detour, DetourCrowd, DetourTileCache) are vendored from
-the 1.6.0 release with three patches (`patches/`) and built with no contraction
+the 1.6.0 release with four patches (`patches/`) and built with no contraction
 of `a*b+c` into an FMA and no fast math (`-ffp-contract=off`, `-fno-fast-math`),
 the same in every profile (`NDEBUG`: upstream's asserts off). The trigonometry
 does not come from the platform's C library, whose `cosf` and `sinf` differ by
@@ -34,7 +34,7 @@ tests, compared on every CI row).
 ## Getting started
 
 ```sh
-mcpp new path --template mcpplibs.mwrap.recastnavigation@1.6.0.1
+mcpp new path --template mcpplibs.mwrap.recastnavigation@1.6.0.2
 cd path
 mcpp run
 ```
@@ -44,7 +44,7 @@ it and prints the way from one side of the wall to the other, around its end.
 
 ```toml
 [dependencies]
-mcpplibs.mwrap.recastnavigation = "1.6.0.1"
+mcpplibs.mwrap.recastnavigation = "1.6.0.2"
 
 # For the same path everywhere: Detour's inline math is compiled in your units too.
 [build]
@@ -86,11 +86,11 @@ The 64-bit polygon references (`DT_POLYREF64`) and the virtual query filter
 - Not here: DebugUtils (drawing a mesh through a debug renderer's callbacks), the demo (RecastDemo) and upstream's tests. The assert hooks (`rcAssertFailSetCustom`, `dtAssertFailSetCustom`) exist only in a build without `NDEBUG`; the package builds with it in every profile.
 - Not `compat.recastnavigation`: the index also has the same release as a traditional package; this wrap vendors its own copy because the same bits everywhere need the library itself compiled with `-ffp-contract=off`, no fast math and `NDEBUG` in every profile, which a dependency's build does not take from its consumer. A program links one of the two, not both.
 - A tile cache needs a compressor: `dtTileCacheCompressor` is an interface the program implements (upstream's demo uses FastLZ, which is not vendored).
-- Patched (`patches/`, the files' tarball and patched checksums in `upstream/documents.json`): 0001 makes DetourCrowd's obstacle avoidance and DetourTileCache's oriented boxes call Detour's own `dtMathCosf` and `dtMathSinf` instead of `cosf` and `sinf` (upstream-worthy); 0002 makes the hooks and Recast's two `cosf` calls use `port/` (wrapper-specific). 0003 fixes the adaptive sampling pattern for an even `adaptiveDivs`: a ring's last direction was written one slot past the one counted, so the crowd sampled an uninitialised direction, and past the array's end at 32 divisions and 4 rings (upstream issues #496, #798). An infinity or a NaN gives the one quiet NaN `0x7fc00000` on every platform.
+- Patched (`patches/`, the files' tarball and patched checksums in `upstream/documents.json`): 0001 makes DetourCrowd's obstacle avoidance and DetourTileCache's oriented boxes call Detour's own `dtMathCosf` and `dtMathSinf` instead of `cosf` and `sinf` (upstream-worthy); 0002 makes the hooks and Recast's two `cosf` calls use `port/` (wrapper-specific). 0003 fixes the adaptive sampling pattern for an even `adaptiveDivs`: a ring's last direction was written one slot past the one counted, so the crowd sampled an uninitialised direction, and past the array's end at 32 divisions and 4 rings (upstream issues #496, #798). 0004 makes the BV tree and the contours' hole merging sort with `std::stable_sort` instead of `qsort`, which is not stable: glibc, macOS, the Windows UCRT and emscripten order equal keys differently, so a mesh with ties (common on a grid) had different bytes by platform (upstream-worthy). An infinity or a NaN gives the one quiet NaN `0x7fc00000` on every platform.
 
 ## Verification
 
-- `mcpp test`: a navmesh built from a floor and a wall, the same bytes twice; a path around the wall, its straight path, a ray along the mesh stopped by the wall; a crowd of four walked through the doorway to the far side; eight agents crossing a circle through each other with four obstacle-avoidance settings (3 to 32 sample directions); the mesh's bytes and both crowds' states pinned; the adapted constants. `tests/trig_test.cpp`: sin, cos and atan2 against the double reference over a dense sweep (under 1 ulp; the results fingerprinted), C's special cases; `RECAST_TRIG_EXHAUSTIVE=1` sweeps every float.
+- `mcpp test`: a navmesh built from a floor and a wall, the same bytes twice; a path around the wall, its straight path, a ray along the mesh stopped by the wall; a crowd of four walked through the doorway to the far side; eight agents crossing a circle through each other with four obstacle-avoidance settings (3 to 32 sample directions); a hall tiled in four, its pillars and rooms on a grid so the BV items and contours tie, eight agents walked across it; the meshes' bytes and the crowds' states pinned; the adapted constants. `tests/trig_test.cpp`: sin, cos and atan2 against the double reference over a dense sweep (under 1 ulp; the results fingerprinted), C's special cases; `RECAST_TRIG_EXHAUSTIVE=1` sweeps every float.
 - `python3 tools/check_exports.py`: the module is exactly `tools/surface.json`; given a clang++ (required on CI's LLVM row) the record is derived again from the headers and compared.
 - `python3 tools/test_template.py`: `mcpp new` from an installed copy, a strict build, and a run of the generated project.
 - CI: Linux x86-64 and arm64 (GCC 16, LLVM 23), macOS and Windows (LLVM 23), each in the dev and release profiles, and wasm32 under node — the same pinned hashes on every row.

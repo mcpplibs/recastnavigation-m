@@ -52,7 +52,12 @@ std::uint64_t fnv(std::span<const float> values, std::uint64_t hash = 0xcbf29ce4
 // Recast's pipeline for one tile, as upstream's solo-mesh sample runs it: the triangles rasterised into a
 // heightfield, what an agent cannot stand on or pass under filtered out, regions, contours, polygons and the
 // detail mesh; then Detour's data of it.
-std::vector<unsigned char> build(const Soup& soup) {
+// A tile of a tiled mesh: its cells' bounds (the border added around them) and its place in the grid.
+struct Tile {
+    std::array<float, 3> low, high;
+    int x = 0, z = 0, size = 0;
+};
+std::vector<unsigned char> build(const Soup& soup, const Tile* tile = nullptr) {
     rcConfig config{};
     config.cs = 0.2f;
     config.ch = 0.1f;
@@ -69,7 +74,18 @@ std::vector<unsigned char> build(const Soup& soup) {
     config.detailSampleMaxError = 0.1f;
     const int vertex_count = static_cast<int>(soup.vertices.size() / 3), triangle_count = static_cast<int>(soup.triangles.size() / 3);
     rcCalcBounds(soup.vertices.data(), vertex_count, config.bmin, config.bmax);
-    rcCalcGridSize(config.bmin, config.bmax, config.cs, &config.width, &config.height);
+    if (tile) {
+        // As upstream's tile sample: the tile's cells and a border of walkableRadius + 3 cells around them.
+        config.tileSize = tile->size;
+        config.borderSize = config.walkableRadius + 3;
+        config.width = config.height = tile->size + 2 * config.borderSize;
+        config.bmin[0] = tile->low[0] - static_cast<float>(config.borderSize) * config.cs;
+        config.bmin[2] = tile->low[2] - static_cast<float>(config.borderSize) * config.cs;
+        config.bmax[0] = tile->high[0] + static_cast<float>(config.borderSize) * config.cs;
+        config.bmax[2] = tile->high[2] + static_cast<float>(config.borderSize) * config.cs;
+    } else {
+        rcCalcGridSize(config.bmin, config.bmax, config.cs, &config.width, &config.height);
+    }
 
     rcContext context(false);
     rcHeightfield* solid = rcAllocHeightfield();
@@ -85,7 +101,7 @@ std::vector<unsigned char> build(const Soup& soup) {
     rcFreeHeightField(solid);
     EXPECT_TRUE(rcErodeWalkableArea(&context, config.walkableRadius, *compact));
     EXPECT_TRUE(rcBuildDistanceField(&context, *compact));
-    EXPECT_TRUE(rcBuildRegions(&context, *compact, 0, config.minRegionArea, config.mergeRegionArea));
+    EXPECT_TRUE(rcBuildRegions(&context, *compact, config.borderSize, config.minRegionArea, config.mergeRegionArea));
     rcContourSet* contours = rcAllocContourSet();
     EXPECT_TRUE(rcBuildContours(&context, *compact, config.maxSimplificationError, config.maxEdgeLen, *contours));
     rcPolyMesh* mesh = rcAllocPolyMesh();
@@ -118,6 +134,10 @@ std::vector<unsigned char> build(const Soup& soup) {
     params.cs = config.cs;
     params.ch = config.ch;
     params.buildBvTree = true;
+    if (tile) {
+        params.tileX = tile->x;
+        params.tileY = tile->z;
+    }
     unsigned char* data = nullptr;
     int size = 0;
     EXPECT_TRUE(dtCreateNavMeshData(&params, &data, &size));
@@ -266,6 +286,96 @@ TEST(Navmesh, CrowdAvoidance) {
     }
     std::printf("avoiding crowd %016llx\n", static_cast<unsigned long long>(fnv(state)));
     EXPECT_EQ(fnv(state), 0x96c1d5d10d964de3ull) << "the crowd's places and velocities";
+    dtFreeCrowd(crowd);
+    dtFreeNavMeshQuery(query);
+    dtFreeNavMesh(mesh);
+}
+
+// A regular hall, tiled: a 24 m floor, a 5 x 5 grid of 1 m pillars every 4 m, and a closed 3 m room in each
+// quarter whose floor is cut off from the hall around it. Everything is on the grid, so the BV tree's items
+// tie on their bounds and the contours' holes and diagonals tie on their keys: Recast and Detour sorted them
+// with the C library's qsort, which is not stable, and glibc, macOS, musl (the Web) and the Windows UCRT put
+// equal keys in different orders: the mesh's bytes, and so a crowd on it, differed by platform. Since
+// 1.6.0.2 they sort with std::stable_sort (patches/0004). The four tiles' bytes and a crowd's places on the
+// tiled mesh are pinned: the same on Linux, macOS, Windows and the Web.
+TEST(Navmesh, TiledHallTies) {
+    Soup soup;
+    soup.quad({-12, 0, -12}, {-12, 0, 12}, {12, 0, 12}, {12, 0, -12});
+    for (int row = -2; row <= 2; ++row)
+        for (int column = -2; column <= 2; ++column) {
+            const float x = 4.0f * static_cast<float>(column), z = 4.0f * static_cast<float>(row);
+            soup.box({x - 0.5f, 0, z - 0.5f}, {x + 0.5f, 2, z + 0.5f});
+        }
+    for (const float x : {-7.0f, 7.0f})
+        for (const float z : {-7.0f, 7.0f}) {
+            soup.box({x - 1.6f, 0, z - 1.6f}, {x + 1.6f, 2, z - 1.4f});
+            soup.box({x - 1.6f, 0, z + 1.4f}, {x + 1.6f, 2, z + 1.6f});
+            soup.box({x - 1.6f, 0, z - 1.4f}, {x - 1.4f, 2, z + 1.4f});
+            soup.box({x + 1.4f, 0, z - 1.4f}, {x + 1.6f, 2, z + 1.4f});
+        }
+
+    constexpr int tile_cells = 60;  // 12 m in cells of 0.2
+    dtNavMeshParams params{};
+    params.orig[0] = -12;
+    params.orig[2] = -12;
+    params.tileWidth = params.tileHeight = 12;
+    params.maxTiles = 4;
+    params.maxPolys = 1 << 12;
+    dtNavMesh* mesh = dtAllocNavMesh();
+    ASSERT_TRUE(dtStatusSucceed(mesh->init(&params)));
+    std::uint64_t tiles_hash = 0xcbf29ce484222325ull;
+    for (int z = 0; z < 2; ++z)
+        for (int x = 0; x < 2; ++x) {
+            const float low_x = -12.0f + 12.0f * static_cast<float>(x), low_z = -12.0f + 12.0f * static_cast<float>(z);
+            const Tile tile{{low_x, 0, low_z}, {low_x + 12, 2, low_z + 12}, x, z, tile_cells};
+            const std::vector<unsigned char> bytes = build(soup, &tile);
+            ASSERT_GT(bytes.size(), 0u);
+            tiles_hash = fnv(bytes, tiles_hash);
+            auto* data = static_cast<unsigned char*>(dtAlloc(static_cast<int>(bytes.size()), DT_ALLOC_PERM));
+            std::ranges::copy(bytes, data);
+            ASSERT_TRUE(dtStatusSucceed(mesh->addTile(data, static_cast<int>(bytes.size()), DT_TILE_FREE_DATA, 0, nullptr)));
+        }
+
+    // Eight agents from the hall's edges to the opposite edges, between the pillars and around the rooms.
+    dtNavMeshQuery* query = dtAllocNavMeshQuery();
+    ASSERT_TRUE(dtStatusSucceed(query->init(mesh, 2048)));
+    dtCrowd* crowd = dtAllocCrowd();
+    ASSERT_TRUE(crowd->init(8, 0.5f, mesh));
+    dtQueryFilter filter;
+    const float extents[3] = {1, 2, 1};
+    std::array<std::array<float, 3>, 8> targets{};
+    for (int index = 0; index < 8; ++index) {
+        const float across = -10.0f + 2.5f * static_cast<float>(index % 4) + 0.25f;
+        const float at[3] = {index < 4 ? across : -11, 0, index < 4 ? -11 : across};
+        const float opposite[3] = {index < 4 ? -across : 11, 0, index < 4 ? 11 : -across};
+        dtPolyRef start_ref = 0, end_ref = 0;
+        float start_at[3];
+        ASSERT_TRUE(dtStatusSucceed(query->findNearestPoly(at, extents, &filter, &start_ref, start_at)));
+        ASSERT_TRUE(dtStatusSucceed(query->findNearestPoly(opposite, extents, &filter, &end_ref, targets[index].data())));
+        ASSERT_NE(start_ref, 0u);
+        ASSERT_NE(end_ref, 0u);
+        dtCrowdAgentParams agent{};
+        agent.radius = 0.4f;
+        agent.height = 2;
+        agent.maxAcceleration = 8;
+        agent.maxSpeed = 3;
+        agent.collisionQueryRange = agent.radius * 12;
+        agent.pathOptimizationRange = agent.radius * 30;
+        agent.separationWeight = 1;
+        agent.updateFlags = DT_CROWD_ANTICIPATE_TURNS | DT_CROWD_OPTIMIZE_VIS | DT_CROWD_OPTIMIZE_TOPO | DT_CROWD_OBSTACLE_AVOIDANCE | DT_CROWD_SEPARATION;
+        agent.obstacleAvoidanceType = 3;
+        ASSERT_EQ(crowd->addAgent(start_at, &agent), index);
+        EXPECT_TRUE(crowd->requestMoveTarget(index, end_ref, targets[index].data()));
+    }
+    for (int step = 0; step < 900; ++step) crowd->update(1.0f / 60, nullptr);
+    std::vector<float> places;
+    for (int index = 0; index < 8; ++index) {
+        const dtCrowdAgent* walker = crowd->getAgent(index);
+        places.insert(places.end(), walker->npos, walker->npos + 3);
+    }
+    std::printf("tiled hall: tiles %016llx, crowd %016llx\n", static_cast<unsigned long long>(tiles_hash), static_cast<unsigned long long>(fnv(places)));
+    EXPECT_EQ(tiles_hash, 0x3cfa3346e30b08f1ull) << "the four tiles' bytes";
+    EXPECT_EQ(fnv(places), 0x858c19b1c3879c98ull) << "the crowd's places";
     dtFreeCrowd(crowd);
     dtFreeNavMeshQuery(query);
     dtFreeNavMesh(mesh);

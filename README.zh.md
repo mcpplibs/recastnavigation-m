@@ -11,7 +11,7 @@
 
 上游的 C++ API 保持原样：`rcConfig`、`rcBuildPolyMesh`、`dtNavMesh`、`dtNavMeshQuery`、`dtCrowd`、`dtTileCache`
 以及其他公开名字都是上游的实体，在上游声明它们的全局命名空间里。四个库（Recast、Detour、DetourCrowd、
-DetourTileCache）取自 1.6.0 发布包并打了三个补丁（`patches/`），构建时不把 `a*b+c` 合并为 FMA、不用快速数学
+DetourTileCache）取自 1.6.0 发布包并打了四个补丁（`patches/`），构建时不把 `a*b+c` 合并为 FMA、不用快速数学
 （`-ffp-contract=off`、`-fno-fast-math`），且每种配置都相同（`NDEBUG`：不打开上游的断言）。三角函数不取自平台的
 C 库（glibc、macOS、Windows UCRT 与 emscripten 的 `cosf`、`sinf` 相差一个 ulp）：Detour 的钩子 `dtMathCosf`、
 `dtMathSinf`、`dtMathAtan2f`（群体与瓦片缓存现在按上游本意调用它们）和 Recast 求可行走坡度的 `cosf` 都由
@@ -27,7 +27,7 @@ C 库（glibc、macOS、Windows UCRT 与 emscripten 的 `cosf`、`sinf` 相差�
 ## 快速开始
 
 ```sh
-mcpp new path --template mcpplibs.mwrap.recastnavigation@1.6.0.1
+mcpp new path --template mcpplibs.mwrap.recastnavigation@1.6.0.2
 cd path
 mcpp run
 ```
@@ -36,7 +36,7 @@ mcpp run
 
 ```toml
 [dependencies]
-mcpplibs.mwrap.recastnavigation = "1.6.0.1"
+mcpplibs.mwrap.recastnavigation = "1.6.0.2"
 
 # 各平台得到同样的路线：Detour 的内联数学也在你的编译单元中编译。
 [build]
@@ -73,11 +73,11 @@ int main() {
 - 不在此：DebugUtils（通过调试渲染器的回调绘制网格）、演示程序（RecastDemo）与上游测试。断言钩子（`rcAssertFailSetCustom`、`dtAssertFailSetCustom`）只在未定义 `NDEBUG` 的构建中存在；本包在每种配置都定义它。
 - 不是 `compat.recastnavigation`：索引里也有同一发布的传统包；本封装自带一份副本，因为“处处同位”要求库本身以 `-ffp-contract=off`、不用快速数学、各配置都定义 `NDEBUG` 编译，而依赖的构建不接受消费者的这些标志。一个程序只链接两者之一。
 - 分块缓存需要一个压缩器：`dtTileCacheCompressor` 是由程序实现的接口（上游演示用的 FastLZ 未收录）。
-- 补丁（`patches/`，文件在发布包中与打补丁后的校验和见 `upstream/documents.json`）：0001 让 DetourCrowd 的避障与 DetourTileCache 的有向盒改调 Detour 自己的 `dtMathCosf`、`dtMathSinf`，不再直接调 `cosf`、`sinf`（值得回馈上游）；0002 让这些钩子和 Recast 的两处 `cosf` 使用 `port/`（本封装专有）。0003 修正 `adaptiveDivs` 为偶数时的自适应采样模式：每圈最后一个方向被写到计数槽位的下一个，群体因而采样一个未初始化的方向，在 32 个方向、4 圈时还写出数组末尾（上游 issue #496、#798）。无穷与 NaN 在每个平台都得到同一个静默 NaN `0x7fc00000`。
+- 补丁（`patches/`，文件在发布包中与打补丁后的校验和见 `upstream/documents.json`）：0001 让 DetourCrowd 的避障与 DetourTileCache 的有向盒改调 Detour 自己的 `dtMathCosf`、`dtMathSinf`，不再直接调 `cosf`、`sinf`（值得回馈上游）；0002 让这些钩子和 Recast 的两处 `cosf` 使用 `port/`（本封装专有）。0003 修正 `adaptiveDivs` 为偶数时的自适应采样模式：每圈最后一个方向被写到计数槽位的下一个，群体因而采样一个未初始化的方向，在 32 个方向、4 圈时还写出数组末尾（上游 issue #496、#798）。0004 让 BV 树与轮廓的孔洞合并改用 `std::stable_sort` 排序，不再用不稳定的 `qsort`：glibc、macOS、Windows UCRT 与 emscripten 对相等键的排列不同，带并列键的网格（网格状布局很常见）因而在各平台得到不同的字节（值得回馈上游）。无穷与 NaN 在每个平台都得到同一个静默 NaN `0x7fc00000`。
 
 ## 验证
 
-- `mcpp test`：由地面与墙构建导航网格，两次得到相同字节；绕墙的路径、其直线路径、沿网格被墙挡住的射线；四个智能体组成的群体穿过门洞走到另一侧；八个智能体以四种避障设置（每圈 3 到 32 个采样方向）相互穿过一个圆；钉住网格字节与两个群体状态的哈希；改写的常量。`tests/trig_test.cpp`：sin、cos、atan2 在密集扫描上与 double 参考比较（小于 1 ulp，结果取指纹）以及 C 的特殊情形；`RECAST_TRIG_EXHAUSTIVE=1` 遍历全部 float。
+- `mcpp test`：由地面与墙构建导航网格，两次得到相同字节；绕墙的路径、其直线路径、沿网格被墙挡住的射线；四个智能体组成的群体穿过门洞走到另一侧；八个智能体以四种避障设置（每圈 3 到 32 个采样方向）相互穿过一个圆；分成四块的大厅，柱子与房间排在网格上，使 BV 项与轮廓出现并列键，八个智能体穿过它；钉住网格字节与群体状态的哈希；改写的常量。`tests/trig_test.cpp`：sin、cos、atan2 在密集扫描上与 double 参考比较（小于 1 ulp，结果取指纹）以及 C 的特殊情形；`RECAST_TRIG_EXHAUSTIVE=1` 遍历全部 float。
 - `python3 tools/check_exports.py`：模块与 `tools/surface.json` 完全一致；给定 clang++（CI 的 LLVM 行必需）时再次从头文件推导记录并比对。
 - `python3 tools/test_template.py`：从安装副本 `mcpp new`、严格构建并运行生成的项目。
 - CI：Linux x86-64 与 arm64（GCC 16、LLVM 23），macOS 与 Windows（LLVM 23），各在 dev 与 release 配置下，以及 node 下的 wasm32——每一行都是同样的钉住哈希。
