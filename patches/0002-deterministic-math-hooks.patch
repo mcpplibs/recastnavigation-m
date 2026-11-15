@@ -1,0 +1,68 @@
+The trigonometry calls a deterministic implementation (this package's port/)
+
+Detour's hooks dtMathCosf, dtMathSinf and dtMathAtan2f forward to the
+platform's C library, and Recast's rcMarkWalkableTriangles and
+rcClearUnwalkableTriangles call cosf for the walkable slope; the C libraries'
+results differ by an ulp between glibc, macOS libSystem, the Windows UCRT and
+emscripten's musl. This package promises the same mesh, path and crowd step on
+every platform, so the three hooks and Recast's two calls use
+port/DeterministicMath.cpp (IEEE arithmetic in double, one rounding to float,
+within 1 ulp of the correctly rounded result; tests/trig_test.cpp). sqrtf,
+floorf, ceilf and fabsf stay: IEEE makes them exact everywhere.
+Wrapper-specific (the port is this package's), not for upstream.
+
+Apply from upstream/recastnavigation: git apply -p1 ../../patches/0002-deterministic-math-hooks.patch
+
+diff --git a/Detour/Include/DetourMath.h b/Detour/Include/DetourMath.h
+index 5528ead..b02e8ca 100644
+--- a/Detour/Include/DetourMath.h
++++ b/Detour/Include/DetourMath.h
+@@ -8,14 +8,15 @@ Members in this module are wrappers around the standard math library
+ #define DETOURMATH_H
+ 
+ #include <math.h>
++#include "DeterministicMath.h"
+ 
+ inline float dtMathFabsf(float x) { return fabsf(x); }
+ inline float dtMathSqrtf(float x) { return sqrtf(x); }
+ inline float dtMathFloorf(float x) { return floorf(x); }
+ inline float dtMathCeilf(float x) { return ceilf(x); }
+-inline float dtMathCosf(float x) { return cosf(x); }
+-inline float dtMathSinf(float x) { return sinf(x); }
+-inline float dtMathAtan2f(float y, float x) { return atan2f(y, x); }
++inline float dtMathCosf(float x) { return mcpplibs::mwrap::recastnavigation::port::cosf(x); }
++inline float dtMathSinf(float x) { return mcpplibs::mwrap::recastnavigation::port::sinf(x); }
++inline float dtMathAtan2f(float y, float x) { return mcpplibs::mwrap::recastnavigation::port::atan2f(y, x); }
+ inline bool dtMathIsfinite(float x) { return isfinite(x); }
+ 
+ #endif
+diff --git a/Recast/Source/Recast.cpp b/Recast/Source/Recast.cpp
+index d75a9f5..3a2255d 100644
+--- a/Recast/Source/Recast.cpp
++++ b/Recast/Source/Recast.cpp
+@@ -19,6 +19,7 @@
+ #include "Recast.h"
+ #include "RecastAlloc.h"
+ #include "RecastAssert.h"
++#include "DeterministicMath.h"
+ 
+ #include <math.h>
+ #include <string.h>
+@@ -341,7 +342,7 @@ void rcMarkWalkableTriangles(rcContext* context, const float walkableSlopeAngle,
+ 	rcIgnoreUnused(context);
+ 	rcIgnoreUnused(numVerts);
+ 
+-	const float walkableThr = cosf(walkableSlopeAngle / 180.0f * RC_PI);
++	const float walkableThr = mcpplibs::mwrap::recastnavigation::port::cosf(walkableSlopeAngle / 180.0f * RC_PI);
+ 
+ 	float norm[3];
+ 
+@@ -366,7 +367,7 @@ void rcClearUnwalkableTriangles(rcContext* context, const float walkableSlopeAng
+ 	rcIgnoreUnused(numVerts);
+ 
+ 	// The minimum Y value for a face normal of a triangle with a walkable slope.
+-	const float walkableLimitY = cosf(walkableSlopeAngle / 180.0f * RC_PI);
++	const float walkableLimitY = mcpplibs::mwrap::recastnavigation::port::cosf(walkableSlopeAngle / 180.0f * RC_PI);
+ 
+ 	float faceNormal[3];
+ 	for (int i = 0; i < numTris; ++i)

@@ -70,7 +70,7 @@ def top_level(clang):
     with tempfile.TemporaryDirectory(prefix='recast-surface-') as directory:
         source = Path(directory) / 'all.cpp'
         source.write_text(''.join(f'#include <{header}>\n' for header in headers()), encoding='utf-8')
-        command = [clang, '-std=c++23', '-fsyntax-only', *[f'-D{define}' for define in DEFINES], *[f'-I{path}' for path in include_dirs()], '-Xclang', '-skip-function-bodies',
+        command = [clang, '-std=c++23', '-fsyntax-only', *[f'-D{define}' for define in DEFINES], *[f'-I{path}' for path in include_dirs()], f'-I{ROOT / "port"}', '-Xclang', '-skip-function-bodies',
                    '-Xclang', '-ast-dump=json', str(source)]
         tree = json.loads(subprocess.run(command, check=True, stdout=subprocess.PIPE, text=True).stdout)
     # clang writes a location's file only where it changes from the location printed before: follow it in order.

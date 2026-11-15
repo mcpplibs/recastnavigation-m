@@ -19,6 +19,7 @@
 #include "Recast.h"
 #include "RecastAlloc.h"
 #include "RecastAssert.h"
+#include "DeterministicMath.h"
 
 #include <math.h>
 #include <string.h>
@@ -341,7 +342,7 @@ void rcMarkWalkableTriangles(rcContext* context, const float walkableSlopeAngle,
 	rcIgnoreUnused(context);
 	rcIgnoreUnused(numVerts);
 
-	const float walkableThr = cosf(walkableSlopeAngle / 180.0f * RC_PI);
+	const float walkableThr = mcpplibs::mwrap::recastnavigation::port::cosf(walkableSlopeAngle / 180.0f * RC_PI);
 
 	float norm[3];
 
@@ -366,7 +367,7 @@ void rcClearUnwalkableTriangles(rcContext* context, const float walkableSlopeAng
 	rcIgnoreUnused(numVerts);
 
 	// The minimum Y value for a face normal of a triangle with a walkable slope.
-	const float walkableLimitY = cosf(walkableSlopeAngle / 180.0f * RC_PI);
+	const float walkableLimitY = mcpplibs::mwrap::recastnavigation::port::cosf(walkableSlopeAngle / 180.0f * RC_PI);
 
 	float faceNormal[3];
 	for (int i = 0; i < numTris; ++i)

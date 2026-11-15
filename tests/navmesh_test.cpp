@@ -209,6 +209,66 @@ TEST(Navmesh, BuiltQueriedWalked) {
     dtFreeNavMesh(mesh);
 }
 
+// Eight agents on a circle walked across it to the opposite points, through each other: obstacle avoidance
+// (the adaptive sampling, its pattern turned by dtMathCosf and dtMathSinf) decides every step. Four
+// avoidance settings, 3 to 32 directions a ring, two agents each. Their places and velocities after the
+// walk are pinned: the same on Linux, macOS, Windows and the Web (before 1.6.0.1 the pattern came from the
+// platform's cosf and sinf and the crowd drifted apart by platform).
+TEST(Navmesh, CrowdAvoidance) {
+    const std::vector<unsigned char> bytes = build(scene());
+    dtNavMesh* mesh = load(bytes);
+    dtNavMeshQuery* query = dtAllocNavMeshQuery();
+    ASSERT_TRUE(dtStatusSucceed(query->init(mesh, 2048)));
+    dtCrowd* crowd = dtAllocCrowd();
+    ASSERT_TRUE(crowd->init(8, 0.5f, mesh));
+    const std::array<std::array<unsigned char, 3>, 4> settings = {{{3, 1, 3}, {7, 2, 5}, {13, 3, 4}, {32, 4, 2}}};
+    for (int type = 0; type < 4; ++type) {
+        dtObstacleAvoidanceParams avoidance = *crowd->getObstacleAvoidanceParams(type);
+        avoidance.adaptiveDivs = settings[type][0];
+        avoidance.adaptiveRings = settings[type][1];
+        avoidance.adaptiveDepth = settings[type][2];
+        crowd->setObstacleAvoidanceParams(type, &avoidance);
+    }
+    dtQueryFilter filter;
+    const float extents[3] = {1, 2, 1};
+    std::array<std::array<float, 3>, 8> targets{};
+    for (int index = 0; index < 8; ++index) {
+        // On a circle of 4 m about (-5, 0, 0), a little off even angles so no two walk exactly head on.
+        const float angle = static_cast<float>(index) * 0.785398163f + 0.1f;
+        const float at[3] = {-5 + 4 * dtMathCosf(angle), 0, 4 * dtMathSinf(angle)};
+        const float opposite[3] = {-5 - 4 * dtMathCosf(angle), 0, -4 * dtMathSinf(angle)};
+        dtPolyRef start_ref = 0, end_ref = 0;
+        float start_at[3];
+        ASSERT_TRUE(dtStatusSucceed(query->findNearestPoly(at, extents, &filter, &start_ref, start_at)));
+        ASSERT_TRUE(dtStatusSucceed(query->findNearestPoly(opposite, extents, &filter, &end_ref, targets[index].data())));
+        dtCrowdAgentParams agent{};
+        agent.radius = 0.4f;
+        agent.height = 2;
+        agent.maxAcceleration = 8;
+        agent.maxSpeed = 2.5f + 0.125f * static_cast<float>(index);
+        agent.collisionQueryRange = agent.radius * 12;
+        agent.pathOptimizationRange = agent.radius * 30;
+        agent.separationWeight = 1;
+        agent.updateFlags = DT_CROWD_ANTICIPATE_TURNS | DT_CROWD_OPTIMIZE_VIS | DT_CROWD_OPTIMIZE_TOPO | DT_CROWD_OBSTACLE_AVOIDANCE | DT_CROWD_SEPARATION;
+        agent.obstacleAvoidanceType = static_cast<unsigned char>(index % 4);
+        ASSERT_EQ(crowd->addAgent(start_at, &agent), index);
+        EXPECT_TRUE(crowd->requestMoveTarget(index, end_ref, targets[index].data()));
+    }
+    for (int step = 0; step < 900; ++step) crowd->update(1.0f / 60, nullptr);
+    std::vector<float> state;
+    for (int index = 0; index < 8; ++index) {
+        const dtCrowdAgent* walker = crowd->getAgent(index);
+        state.insert(state.end(), walker->npos, walker->npos + 3);
+        state.insert(state.end(), walker->vel, walker->vel + 3);
+        EXPECT_LT(dtVdist2D(walker->npos, targets[index].data()), 1.5f) << index << " crossed to the opposite point";
+    }
+    std::printf("avoiding crowd %016llx\n", static_cast<unsigned long long>(fnv(state)));
+    EXPECT_EQ(fnv(state), 0xe70c951fd13209b9ull) << "the crowd's places and velocities";
+    dtFreeCrowd(crowd);
+    dtFreeNavMeshQuery(query);
+    dtFreeNavMesh(mesh);
+}
+
 TEST(Navmesh, Constants) {
     static_assert(nav::DT_VERTS_PER_POLYGON == 6);
     static_assert(nav::RC_WALKABLE_AREA == 63);

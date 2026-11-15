@@ -2,6 +2,18 @@
   "upstream": "https://github.com/recastnavigation/recastnavigation/archive/refs/tags/v1.6.0.tar.gz",
   "upstream_sha256": "d48ca0121962fa0639502c0f56c4e3ae72f98e55d88727225444f500775c0074",
   "pruning": "Only the four libraries (Recast/, Detour/, DetourCrowd/, DetourTileCache/: Include and Source) with the README and License.txt. Not vendored: DebugUtils (drawing helpers for a debug renderer), the demo (RecastDemo), the tests, the documents, the CMake and pkg-config files.",
+  "patches": [
+    {
+      "path": "patches/0001-trig-through-detour-math-hooks.patch",
+      "upstream_commit": null,
+      "why": "DetourObstacleAvoidance.cpp (dtRorate2D, sampleVelocityAdaptive) and DetourTileCache.cpp (addBoxObstacle) called the C library's cosf and sinf past Detour's own hooks dtMathCosf and dtMathSinf, so a crowd with obstacle avoidance walked differently per platform; upstream-worthy, not yet upstream."
+    },
+    {
+      "path": "patches/0002-deterministic-math-hooks.patch",
+      "upstream_commit": null,
+      "why": "Detour's dtMathCosf, dtMathSinf and dtMathAtan2f and Recast's two cosf calls (the walkable slope) use port/DeterministicMath.cpp instead of the platform's libm (cosf, sinf, atan2f differ by an ulp between glibc, macOS, the Windows UCRT and emscripten); wrapper-specific."
+    }
+  ],
   "documents": [
     {
       "path": "upstream/recastnavigation/README.md",
@@ -33,7 +45,9 @@
     {
       "path": "upstream/recastnavigation/Detour/Include/DetourMath.h",
       "source": "https://github.com/recastnavigation/recastnavigation/blob/v1.6.0/Detour/Include/DetourMath.h",
-      "sha256": "f8c4e9d51a526ec5c38c01e48a035e50c6acaa1d0dd69ffa66209cb092d4cac7"
+      "sha256": "ac9ff46f6738f742a7ba9df49b9d875bf6635bc5bd91245de4f420b2ef986bf0",
+      "upstream_sha256": "f8c4e9d51a526ec5c38c01e48a035e50c6acaa1d0dd69ffa66209cb092d4cac7",
+      "patch": "patches/0002-deterministic-math-hooks.patch"
     },
     {
       "path": "upstream/recastnavigation/Detour/Include/DetourNavMesh.h",
@@ -138,7 +152,9 @@
     {
       "path": "upstream/recastnavigation/DetourCrowd/Source/DetourObstacleAvoidance.cpp",
       "source": "https://github.com/recastnavigation/recastnavigation/blob/v1.6.0/DetourCrowd/Source/DetourObstacleAvoidance.cpp",
-      "sha256": "6cb574546c1642bfa5bb1ef665ea72b494c24bb64ac76fddf1856473831414f8"
+      "sha256": "a1d7c3bb94c01649f992871f94c961515633aa1f78597b2101f12e150c7a5310",
+      "upstream_sha256": "6cb574546c1642bfa5bb1ef665ea72b494c24bb64ac76fddf1856473831414f8",
+      "patch": "patches/0001-trig-through-detour-math-hooks.patch"
     },
     {
       "path": "upstream/recastnavigation/DetourCrowd/Source/DetourPathCorridor.cpp",
@@ -168,7 +184,9 @@
     {
       "path": "upstream/recastnavigation/DetourTileCache/Source/DetourTileCache.cpp",
       "source": "https://github.com/recastnavigation/recastnavigation/blob/v1.6.0/DetourTileCache/Source/DetourTileCache.cpp",
-      "sha256": "08ba9c382fbfd742a083d45e7fd5a18f01ee073550ee539648f65b3d715a570e"
+      "sha256": "b3d85ffb073f95b1145235831cb0ea473dc1150c2ae1a7ab25aa708024f52e1d",
+      "upstream_sha256": "08ba9c382fbfd742a083d45e7fd5a18f01ee073550ee539648f65b3d715a570e",
+      "patch": "patches/0001-trig-through-detour-math-hooks.patch"
     },
     {
       "path": "upstream/recastnavigation/DetourTileCache/Source/DetourTileCacheBuilder.cpp",
@@ -193,7 +211,9 @@
     {
       "path": "upstream/recastnavigation/Recast/Source/Recast.cpp",
       "source": "https://github.com/recastnavigation/recastnavigation/blob/v1.6.0/Recast/Source/Recast.cpp",
-      "sha256": "865595763451cde0aad5b99088bfab48d4ea35050fefd67f3d4f95885ba38d66"
+      "sha256": "5ec7ad94134f29749e12b9555a9f82f48252fb3690fb0ff6d17969ef4d1c8ba2",
+      "upstream_sha256": "865595763451cde0aad5b99088bfab48d4ea35050fefd67f3d4f95885ba38d66",
+      "patch": "patches/0002-deterministic-math-hooks.patch"
     },
     {
       "path": "upstream/recastnavigation/Recast/Source/RecastAlloc.cpp",

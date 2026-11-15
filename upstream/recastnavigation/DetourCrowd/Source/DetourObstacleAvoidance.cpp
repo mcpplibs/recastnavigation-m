@@ -496,8 +496,8 @@ inline void dtNormalize2D(float* v)
 // vector normalization that ignores the y-component.
 inline void dtRorate2D(float* dest, const float* v, float ang)
 {
-	float c = cosf(ang);
-	float s = sinf(ang);
+	float c = dtMathCosf(ang);
+	float s = dtMathSinf(ang);
 	dest[0] = v[0]*c - v[2]*s;
 	dest[2] = v[0]*s + v[2]*c;
 	dest[1] = v[1];
@@ -532,8 +532,8 @@ int dtObstacleAvoidanceQuery::sampleVelocityAdaptive(const float* pos, const flo
 	const int nd = dtClamp(ndivs, 1, DT_MAX_PATTERN_DIVS);
 	const int nr = dtClamp(nrings, 1, DT_MAX_PATTERN_RINGS);
 	const float da = (1.0f/nd) * DT_PI*2;
-	const float ca = cosf(da);
-	const float sa = sinf(da);
+	const float ca = dtMathCosf(da);
+	const float sa = dtMathSinf(da);
 
 	// desired direction
 	float ddir[6];

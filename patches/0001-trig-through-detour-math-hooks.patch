@@ -1,0 +1,56 @@
+Detour's own trigonometry hooks in DetourCrowd and DetourTileCache
+
+DetourMath.h declares dtMathCosf and dtMathSinf so that a build can replace
+the C library's trigonometry, but DetourObstacleAvoidance.cpp (dtRorate2D and
+sampleVelocityAdaptive) and DetourTileCache.cpp (addBoxObstacle's oriented
+box) call cosf and sinf directly, past the hook. With the hook replaced by a
+deterministic implementation (patches/0002) a crowd with
+DT_CROWD_OBSTACLE_AVOIDANCE still took its sampling pattern from the platform's
+libm, whose cosf and sinf differ by an ulp between glibc, macOS, the Windows
+UCRT and emscripten: the same crowd walked to different places. The calls go
+through the hooks; with the default DetourMath.h nothing changes. Not yet
+upstream (recastnavigation main still calls cosf/sinf there).
+
+Apply from upstream/recastnavigation: git apply -p1 ../../patches/0001-trig-through-detour-math-hooks.patch
+
+diff --git a/DetourCrowd/Source/DetourObstacleAvoidance.cpp b/DetourCrowd/Source/DetourObstacleAvoidance.cpp
+index 94f7df6..56bed74 100644
+--- a/DetourCrowd/Source/DetourObstacleAvoidance.cpp
++++ b/DetourCrowd/Source/DetourObstacleAvoidance.cpp
+@@ -496,8 +496,8 @@ inline void dtNormalize2D(float* v)
+ // vector normalization that ignores the y-component.
+ inline void dtRorate2D(float* dest, const float* v, float ang)
+ {
+-	float c = cosf(ang);
+-	float s = sinf(ang);
++	float c = dtMathCosf(ang);
++	float s = dtMathSinf(ang);
+ 	dest[0] = v[0]*c - v[2]*s;
+ 	dest[2] = v[0]*s + v[2]*c;
+ 	dest[1] = v[1];
+@@ -532,8 +532,8 @@ int dtObstacleAvoidanceQuery::sampleVelocityAdaptive(const float* pos, const flo
+ 	const int nd = dtClamp(ndivs, 1, DT_MAX_PATTERN_DIVS);
+ 	const int nr = dtClamp(nrings, 1, DT_MAX_PATTERN_RINGS);
+ 	const float da = (1.0f/nd) * DT_PI*2;
+-	const float ca = cosf(da);
+-	const float sa = sinf(da);
++	const float ca = dtMathCosf(da);
++	const float sa = dtMathSinf(da);
+ 
+ 	// desired direction
+ 	float ddir[6];
+diff --git a/DetourTileCache/Source/DetourTileCache.cpp b/DetourTileCache/Source/DetourTileCache.cpp
+index 6f97ab5..08c4ed2 100644
+--- a/DetourTileCache/Source/DetourTileCache.cpp
++++ b/DetourTileCache/Source/DetourTileCache.cpp
+@@ -448,8 +448,8 @@ dtStatus dtTileCache::addBoxObstacle(const float* center, const float* halfExten
+ 	dtVcopy(ob->orientedBox.center, center);
+ 	dtVcopy(ob->orientedBox.halfExtents, halfExtents);
+ 
+-	float coshalf= cosf(0.5f*yRadians);
+-	float sinhalf = sinf(-0.5f*yRadians);
++	float coshalf= dtMathCosf(0.5f*yRadians);
++	float sinhalf = dtMathSinf(-0.5f*yRadians);
+ 	ob->orientedBox.rotAux[0] = coshalf*sinhalf;
+ 	ob->orientedBox.rotAux[1] = coshalf*coshalf - 0.5f;
+ 
