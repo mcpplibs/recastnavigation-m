@@ -11,7 +11,7 @@
 
 上游的 C++ API 保持原样：`rcConfig`、`rcBuildPolyMesh`、`dtNavMesh`、`dtNavMeshQuery`、`dtCrowd`、`dtTileCache`
 以及其他公开名字都是上游的实体，在上游声明它们的全局命名空间里。四个库（Recast、Detour、DetourCrowd、
-DetourTileCache）取自 1.6.0 发布包并打了两个补丁（`patches/`），构建时不把 `a*b+c` 合并为 FMA、不用快速数学
+DetourTileCache）取自 1.6.0 发布包并打了三个补丁（`patches/`），构建时不把 `a*b+c` 合并为 FMA、不用快速数学
 （`-ffp-contract=off`、`-fno-fast-math`），且每种配置都相同（`NDEBUG`：不打开上游的断言）。三角函数不取自平台的
 C 库（glibc、macOS、Windows UCRT 与 emscripten 的 `cosf`、`sinf` 相差一个 ulp）：Detour 的钩子 `dtMathCosf`、
 `dtMathSinf`、`dtMathAtan2f`（群体与瓦片缓存现在按上游本意调用它们）和 Recast 求可行走坡度的 `cosf` 都由
@@ -73,7 +73,7 @@ int main() {
 - 不在此：DebugUtils（通过调试渲染器的回调绘制网格）、演示程序（RecastDemo）与上游测试。断言钩子（`rcAssertFailSetCustom`、`dtAssertFailSetCustom`）只在未定义 `NDEBUG` 的构建中存在；本包在每种配置都定义它。
 - 不是 `compat.recastnavigation`：索引里也有同一发布的传统包；本封装自带一份副本，因为“处处同位”要求库本身以 `-ffp-contract=off`、不用快速数学、各配置都定义 `NDEBUG` 编译，而依赖的构建不接受消费者的这些标志。一个程序只链接两者之一。
 - 分块缓存需要一个压缩器：`dtTileCacheCompressor` 是由程序实现的接口（上游演示用的 FastLZ 未收录）。
-- 补丁（`patches/`，文件在发布包中与打补丁后的校验和见 `upstream/documents.json`）：0001 让 DetourCrowd 的避障与 DetourTileCache 的有向盒改调 Detour 自己的 `dtMathCosf`、`dtMathSinf`，不再直接调 `cosf`、`sinf`（值得回馈上游）；0002 让这些钩子和 Recast 的两处 `cosf` 使用 `port/`（本封装专有）。无穷与 NaN 在每个平台都得到同一个静默 NaN `0x7fc00000`。
+- 补丁（`patches/`，文件在发布包中与打补丁后的校验和见 `upstream/documents.json`）：0001 让 DetourCrowd 的避障与 DetourTileCache 的有向盒改调 Detour 自己的 `dtMathCosf`、`dtMathSinf`，不再直接调 `cosf`、`sinf`（值得回馈上游）；0002 让这些钩子和 Recast 的两处 `cosf` 使用 `port/`（本封装专有）。0003 修正 `adaptiveDivs` 为偶数时的自适应采样模式：每圈最后一个方向被写到计数槽位的下一个，群体因而采样一个未初始化的方向，在 32 个方向、4 圈时还写出数组末尾（上游 issue #496、#798）。无穷与 NaN 在每个平台都得到同一个静默 NaN `0x7fc00000`。
 
 ## 验证
 

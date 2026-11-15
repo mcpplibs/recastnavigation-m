@@ -211,7 +211,7 @@ TEST(Navmesh, BuiltQueriedWalked) {
 
 // Eight agents on a circle walked across it to the opposite points, through each other: obstacle avoidance
 // (the adaptive sampling, its pattern turned by dtMathCosf and dtMathSinf) decides every step. Four
-// avoidance settings, 3 to 32 directions a ring, two agents each. Their places and velocities after the
+// avoidance settings, 3 to 32 directions a ring (even counts too: patches/0003), two agents each. Their places and velocities after the
 // walk are pinned: the same on Linux, macOS, Windows and the Web (before 1.6.0.1 the pattern came from the
 // platform's cosf and sinf and the crowd drifted apart by platform).
 TEST(Navmesh, CrowdAvoidance) {
@@ -233,8 +233,10 @@ TEST(Navmesh, CrowdAvoidance) {
     const float extents[3] = {1, 2, 1};
     std::array<std::array<float, 3>, 8> targets{};
     for (int index = 0; index < 8; ++index) {
-        // On a circle of 4 m about (-5, 0, 0), a little off even angles so no two walk exactly head on.
-        const float angle = static_cast<float>(index) * 0.785398163f + 0.1f;
+        // On a circle of 4 m about (-5, 0, 0), a little off even angles so no two walk exactly head on. Every
+        // product here is exact (25/32, 4, 1/8), so it gives the same floats whether or not this unit's
+        // compiler fuses a multiply and an add.
+        const float angle = static_cast<float>(index) * 0.78125f + 0.1f;
         const float at[3] = {-5 + 4 * dtMathCosf(angle), 0, 4 * dtMathSinf(angle)};
         const float opposite[3] = {-5 - 4 * dtMathCosf(angle), 0, -4 * dtMathSinf(angle)};
         dtPolyRef start_ref = 0, end_ref = 0;
@@ -263,7 +265,7 @@ TEST(Navmesh, CrowdAvoidance) {
         EXPECT_LT(dtVdist2D(walker->npos, targets[index].data()), 1.5f) << index << " crossed to the opposite point";
     }
     std::printf("avoiding crowd %016llx\n", static_cast<unsigned long long>(fnv(state)));
-    EXPECT_EQ(fnv(state), 0xe70c951fd13209b9ull) << "the crowd's places and velocities";
+    EXPECT_EQ(fnv(state), 0x96c1d5d10d964de3ull) << "the crowd's places and velocities";
     dtFreeCrowd(crowd);
     dtFreeNavMeshQuery(query);
     dtFreeNavMesh(mesh);

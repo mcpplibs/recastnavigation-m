@@ -27,6 +27,8 @@ kind = "lib"
 # dtMathAtan2f) and Recast's walkable-slope cosf call port/DeterministicMath.cpp
 # (patches/0002: IEEE arithmetic only, within 1 ulp of the correctly rounded
 # float). sqrtf, floorf, ceilf and fabsf are exact under IEEE everywhere.
+# patches/0003: with an even adaptiveDivs the crowd sampled an uninitialised
+# direction (upstream issue #496), which no flag makes the same everywhere.
 # NDEBUG: the same library in every profile — upstream declares its assert
 # hooks (rcAssertFailSetCustom, dtAssertFailSetCustom) and checks only when
 # NDEBUG is not defined, which would make the module's names differ between a

@@ -1,0 +1,29 @@
+The adaptive sampling pattern's last direction of a ring with an even count
+
+dtObstacleAvoidanceQuery::sampleVelocityAdaptive, for an even adaptiveDivs,
+wrote a ring's last direction one slot past the one it then counted
+(pat[npat*2+2], pat[npat*2+3] before npat++): the counted slot was never
+written, so the crowd sampled an uninitialised direction (a different velocity
+by platform, compiler and profile), and with adaptiveDivs 32 and adaptiveRings
+4 (both at their limits) the write went past the end of pat (on the stack).
+The direction goes to the slot it counts, as upstream issue #496 proposes
+(https://github.com/recastnavigation/recastnavigation/issues/496, also #798);
+an odd adaptiveDivs (the default is 7) is unchanged. Not yet upstream.
+
+Apply from upstream/recastnavigation, after 0001: git apply -p1 ../../patches/0003-adaptive-pattern-even-divs.patch
+
+diff --git a/DetourCrowd/Source/DetourObstacleAvoidance.cpp b/DetourCrowd/Source/DetourObstacleAvoidance.cpp
+index 56bed74..fc23145 100644
+--- a/DetourCrowd/Source/DetourObstacleAvoidance.cpp
++++ b/DetourCrowd/Source/DetourObstacleAvoidance.cpp
+@@ -571,8 +571,8 @@ int dtObstacleAvoidanceQuery::sampleVelocityAdaptive(const float* pos, const flo
+ 
+ 		if ((nd&1) == 0)
+ 		{
+-			pat[npat*2+2] = last2[0]*ca - last2[1]*sa;
+-			pat[npat*2+3] = last2[0]*sa + last2[1]*ca;
++			pat[npat*2+0] = last2[0]*ca - last2[1]*sa;
++			pat[npat*2+1] = last2[0]*sa + last2[1]*ca;
+ 			npat++;
+ 		}
+ 	}
