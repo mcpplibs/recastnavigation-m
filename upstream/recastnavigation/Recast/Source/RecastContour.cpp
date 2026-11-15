@@ -17,6 +17,7 @@
 //
 
 #include <math.h>
+#include <algorithm>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -724,7 +725,7 @@ static void mergeRegionHoles(rcContext* ctx, rcContourRegion& region)
 	for (int i = 0; i < region.nholes; i++)
 		findLeftMostVertex(region.holes[i].contour, &region.holes[i].minx, &region.holes[i].minz, &region.holes[i].leftmost);
 	
-	qsort(region.holes, region.nholes, sizeof(rcContourHole), compareHoles);
+	std::stable_sort(region.holes, region.holes + region.nholes, [](const rcContourHole& a, const rcContourHole& b) { return compareHoles(&a, &b) < 0; });
 	
 	int maxVerts = region.outline->nverts;
 	for (int i = 0; i < region.nholes; i++)
@@ -770,7 +771,7 @@ static void mergeRegionHoles(rcContext* ctx, rcContourRegion& region)
 				}
 			}
 			// Sort potential diagonals by distance, we want to make the connection as short as possible.
-			qsort(diags, ndiags, sizeof(rcPotentialDiagonal), compareDiagDist);
+			std::stable_sort(&diags[0], &diags[0] + ndiags, [](const rcPotentialDiagonal& a, const rcPotentialDiagonal& b) { return compareDiagDist(&a, &b) < 0; });
 			
 			// Find a diagonal that is not intersecting the outline not the remaining holes.
 			index = -1;

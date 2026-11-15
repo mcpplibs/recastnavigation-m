@@ -17,6 +17,7 @@
 //
 
 #include <stdio.h>
+#include <algorithm>
 #include <stdlib.h>
 #include <string.h>
 #include <float.h>
@@ -142,17 +143,17 @@ static void subdivide(BVItem* items, int nitems, int imin, int imax, int& curNod
 		if (axis == 0)
 		{
 			// Sort along x-axis
-			qsort(items+imin, inum, sizeof(BVItem), compareItemX);
+			std::stable_sort(items+imin, items+imin+inum, [](const BVItem& a, const BVItem& b) { return compareItemX(&a, &b) < 0; });
 		}
 		else if (axis == 1)
 		{
 			// Sort along y-axis
-			qsort(items+imin, inum, sizeof(BVItem), compareItemY);
+			std::stable_sort(items+imin, items+imin+inum, [](const BVItem& a, const BVItem& b) { return compareItemY(&a, &b) < 0; });
 		}
 		else
 		{
 			// Sort along z-axis
-			qsort(items+imin, inum, sizeof(BVItem), compareItemZ);
+			std::stable_sort(items+imin, items+imin+inum, [](const BVItem& a, const BVItem& b) { return compareItemZ(&a, &b) < 0; });
 		}
 		
 		int isplit = imin+inum/2;
