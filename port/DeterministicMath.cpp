@@ -19,6 +19,7 @@
 #include "DeterministicMath.h"
 
 #include <bit>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 
